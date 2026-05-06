@@ -11,6 +11,13 @@ import os
 import requests
 from datetime import datetime, timezone
 
+# Helper functions for observation bulk insert used later
+def clean_text(value):
+    return None if value is None else value.strip()
+        
+def unix_to_utc(value):
+    return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
+
 load_dotenv()   # reads variables from .env file and sets them in the os.environ
 
 # -- fetch live data from OpenSky --
@@ -45,9 +52,28 @@ with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), hos
          aircraft_rows
         )
         # -- Build observation rows for bulk insert --
+        
         observation_rows = []
         for flight in flights:
-            observation = (snapshot_id, flight[0], None if flight[1] is None else flight[1].strip(), None if flight[3] is None else datetime.fromtimestamp(flight[3], tz=timezone.utc), datetime.fromtimestamp(flight[4], tz=timezone.utc) , flight[5], flight[6], flight[7], flight[8], flight[9], flight[10], flight[11], flight[12], flight[13], flight[14], flight[15], flight[16])
+            observation = (
+                snapshot_id, 
+                flight[0], 
+                clean_text(flight[1]), 
+                unix_to_utc(flight[3]), 
+                unix_to_utc(flight[4]), 
+                flight[5], 
+                flight[6], 
+                flight[7], 
+                flight[8], 
+                flight[9], 
+                flight[10], 
+                flight[11], 
+                flight[12], 
+                flight[13], 
+                flight[14], 
+                flight[15], 
+                flight[16]
+                )
             observation_rows.append(observation)    
 
         cur.executemany('''
@@ -72,4 +98,3 @@ with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), hos
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
         observation_rows                
         )
-
