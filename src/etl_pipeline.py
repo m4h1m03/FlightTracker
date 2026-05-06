@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import os
 import requests
 from datetime import datetime, timezone
+import time 
+import sys
 
 # Helper functions for observation bulk insert used later
 def clean_text(value):
@@ -20,8 +22,15 @@ def unix_to_utc(value):
 
 load_dotenv()   # reads variables from .env file and sets them in the os.environ
 
+OPENSKY_URL = 'https://opensky-network.org/api/states/all'
 # -- fetch live data from OpenSky --
-response = requests.get('https://opensky-network.org/api/states/all')
+start = time.time()  # used for fetch _duration
+response = requests.get(OPENSKY_URL)
+
+if response.status_code != 200:
+    print(f'OpenSky returned a {response.status_code}; aborting ')
+    sys.exit(1)
+
 response_dict = response.json()
 
 # -- Build aircraft rows for bulk insert --
@@ -31,70 +40,73 @@ for flight in flights:
     aircraft = (flight[0], flight[2])
     aircraft_rows.append(aircraft)
 
+def main():
+    with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host= os.getenv('DB_HOST'), port=os.getenv('DB_PORT')) as conn:
+        with conn.cursor() as cur:
+    
+            # -- loading snapshot into the database
+            snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
+            flight_count = len(flights)
+            fetch_duration = int((time.time() - start) * 1000) # milliseconds
+            fetch_status = 'success'
+            cur.execute(
+            'INSERT INTO snapshots (snapshot_time, flight_count, fetch_duration, fetch_status) VALUES (%s, %s, %s, %s) RETURNING id',
+            (snapshot_time, flight_count, fetch_duration, fetch_status))
+            snapshot_id = cur.fetchone()[0]
+            print(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
 
-with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host= os.getenv('DB_HOST'), port=os.getenv('DB_PORT')) as conn:
-    with conn.cursor() as cur:
-        
-        # -- loading snapshot into the database
-        snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
-        flight_count = len(flights)
-        fetch_duration = 0
-        fetch_status = 'success'
-        cur.execute(
-        'INSERT INTO snapshots (snapshot_time, flight_count, fetch_duration, fetch_status) VALUES (%s, %s, %s, %s) RETURNING id',
-        (snapshot_time, flight_count, fetch_duration, fetch_status))
-        snapshot_id = cur.fetchone()[0]
-        print(snapshot_id)
+            # -- Same aircraft appears across many snapshots; skip if we've already recorded it
+            cur.executemany(
+            'INSERT INTO aircraft (icao24, origin_country) VALUES (%s, %s) ON CONFLICT (icao24) DO NOTHING',
+            aircraft_rows
+            )
+            # -- Build observation rows for bulk insert --
+            
+            observation_rows = []
+            for flight in flights:
+                observation = (
+                    snapshot_id, 
+                    flight[0], 
+                    clean_text(flight[1]), 
+                    unix_to_utc(flight[3]), 
+                    unix_to_utc(flight[4]), 
+                    flight[5], 
+                    flight[6], 
+                    flight[7], 
+                    flight[8], 
+                    flight[9], 
+                    flight[10], 
+                    flight[11], 
+                    flight[12], 
+                    flight[13], 
+                    flight[14], 
+                    flight[15], 
+                    flight[16]
+                    )
+                observation_rows.append(observation)    
 
-        # -- Same aircraft appears across many snapshots; skip if we've already recorded it
-        cur.executemany(
-        'INSERT INTO aircraft (icao24, origin_country) VALUES (%s, %s) ON CONFLICT (icao24) DO NOTHING',
-         aircraft_rows
-        )
-        # -- Build observation rows for bulk insert --
-        
-        observation_rows = []
-        for flight in flights:
-            observation = (
-                snapshot_id, 
-                flight[0], 
-                clean_text(flight[1]), 
-                unix_to_utc(flight[3]), 
-                unix_to_utc(flight[4]), 
-                flight[5], 
-                flight[6], 
-                flight[7], 
-                flight[8], 
-                flight[9], 
-                flight[10], 
-                flight[11], 
-                flight[12], 
-                flight[13], 
-                flight[14], 
-                flight[15], 
-                flight[16]
-                )
-            observation_rows.append(observation)    
+            cur.executemany('''
+            INSERT INTO observations (
+            snapshot_id, 
+            icao24,
+            callsign, 
+            time_position,
+            last_contact,
+            longitude,
+            latitude,
+            baro_altitude,
+            on_ground,
+            velocity,
+            true_track,
+            vertical_rate,
+            sensors,
+            geo_altitude,
+            squawk,
+            spi,
+            position_source
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+            observation_rows                
+            )
 
-        cur.executemany('''
-        INSERT INTO observations (
-        snapshot_id, 
-        icao24,
-        callsign, 
-        time_position,
-        last_contact,
-        longitude,
-        latitude,
-        baro_altitude,
-        on_ground,
-        velocity,
-        true_track,
-        vertical_rate,
-        sensors,
-        geo_altitude,
-        squawk,
-        spi,
-        position_source
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
-        observation_rows                
-        )
+if __name__ == "__main__":
+    main()
