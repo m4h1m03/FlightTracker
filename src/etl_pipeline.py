@@ -32,13 +32,10 @@ if response.status_code != 200:
     sys.exit(1)
 
 response_dict = response.json()
+flights = response_dict['states']
 
 # -- Build aircraft rows for bulk insert --
-flights = response_dict['states']
-aircraft_rows = []
-for flight in flights:
-    aircraft = (flight[0], flight[2])
-    aircraft_rows.append(aircraft)
+aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
 
 def main():
     with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host= os.getenv('DB_HOST'), port=os.getenv('DB_PORT')) as conn:
