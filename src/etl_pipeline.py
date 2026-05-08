@@ -8,6 +8,7 @@ and observations (one row per (aircraft, snapshot) pair).
 import psycopg 
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 import requests
 from datetime import datetime, timezone
 import time 
@@ -20,7 +21,8 @@ def clean_text(value):
 def unix_to_utc(value):
     return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
 
-load_dotenv()   # reads variables from .env file and sets them in the os.environ
+ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(ENV_PATH)   # reads variables from .env file and sets them in the os.environ
 
 OPENSKY_URL = 'https://opensky-network.org/api/states/all'
 # -- fetch live data from OpenSky --
@@ -38,7 +40,12 @@ flights = response_dict['states']
 aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
 
 def main():
-    with psycopg.connect(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host= os.getenv('DB_HOST'), port=os.getenv('DB_PORT')) as conn:
+    with psycopg.connect(
+        dbname=os.getenv('DB_NAME'), 
+        user=os.getenv('DB_USER'), 
+        host=os.getenv('DB_HOST'), 
+        port=os.getenv('DB_PORT')
+    ) as conn:
         with conn.cursor() as cur:
     
             # -- loading snapshot into the database
@@ -47,7 +54,10 @@ def main():
             fetch_duration = int((time.time() - start) * 1000) # milliseconds
             fetch_status = 'success'
             cur.execute(
-            'INSERT INTO snapshots (snapshot_time, flight_count, fetch_duration, fetch_status) VALUES (%s, %s, %s, %s) RETURNING id',
+            '''INSERT INTO snapshots (
+            snapshot_time, flight_count, 
+            fetch_duration, fetch_status
+            ) VALUES (%s, %s, %s, %s) RETURNING id''',
             (snapshot_time, flight_count, fetch_duration, fetch_status))
             snapshot_id = cur.fetchone()[0]
             print(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
