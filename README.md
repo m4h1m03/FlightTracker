@@ -2,6 +2,8 @@
 
 A personal data project to practice the full data analyst pipeline end-to-end: ingest live data from a public API, store it in a relational database, transform it with SQL, and visualise it on a dashboard. Flight data was chosen as there are a vast number of insights that can be drawn from it.
 
+**[View the live dashboard →](https://datastudio.google.com/reporting/cfddb713-c4b2-48b8-b097-c5efb68bf7d1)**
+
 ---
 
 ## Why I Built It
