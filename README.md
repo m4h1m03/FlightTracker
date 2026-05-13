@@ -68,7 +68,7 @@ A dashboard is not just a collection of charts — every design decision (what t
 
 A fully functioning ETL pipeline that can be run manually or scheduled to execute automatically without manual intervention. The pipeline fetches live global flight data from the OpenSky Network API, stores it across a structured three-table PostgreSQL database, and transforms it using SQL joins for analysis.
 
-The project culminates in a fully interactive two-page Looker Studio dashboard. Page 1 provides a global overview of air traffic patterns — including a heatmap of flight density, flight count over time, and average velocity across snapshots. Page 2 focuses on a non-US breakdown, exploring aircraft observations, airborne vs on-ground ratios, altitude comparisons, and the relationship between altitude and velocity across origin countries.
+The project culminates in a fully interactive two-page Looker Studio dashboard. Page 1 provides a global overview of air traffic patterns — including a heatmap of flight density, flight count over time, and average velocity across snapshots. Page 2 focuses on a non-US breakdown, exploring aircraft observations, airborne vs on-ground ratios, altitude comparisons, and the relationship between altitude and velocity across origin countries. The dataset covers 16 snapshots collected on 11 May 2026 between 12:00 and 19:30 BST, totalling 184,124 observations.
 
 ---
 
