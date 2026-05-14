@@ -14,32 +14,34 @@ from datetime import datetime, timezone
 import time 
 import sys
 
-# Helper functions for observation bulk insert used later
-def clean_text(value):
-    return None if value is None else value.strip()
-        
-def unix_to_utc(value):
-    return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
 
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(ENV_PATH)   # reads variables from .env file and sets them in the os.environ
 
 OPENSKY_URL = 'https://opensky-network.org/api/states/all'
-# -- fetch live data from OpenSky --
-start = time.time()  # used for fetch _duration
-response = requests.get(OPENSKY_URL)
 
-if response.status_code != 200:
-    print(f'OpenSky returned a {response.status_code}; aborting ')
-    sys.exit(1)
+# Helper functions for observation bulk insert used later
+def clean_text(value):
+    return None if value is None else value.strip()
 
-response_dict = response.json()
-flights = response_dict['states']
-
-# -- Build aircraft rows for bulk insert --
-aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
+def unix_to_utc(value):
+    return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
 
 def main():
+    # -- fetch live data from OpenSky --
+    start = time.time()  # used for fetch _duration
+    response = requests.get(OPENSKY_URL)
+
+    if response.status_code != 200:
+        print(f'OpenSky returned a {response.status_code}; aborting ')
+        sys.exit(1)
+
+    response_dict = response.json()
+    flights = response_dict['states']
+
+    # -- Build aircraft rows for bulk insert --
+    aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
+
     with psycopg.connect(
         dbname=os.getenv('DB_NAME'), 
         user=os.getenv('DB_USER'), 
