@@ -29,17 +29,26 @@ def clean_text(value):
 def unix_to_utc(value):
     return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
 
+class FlightFetcher:
+    def __init__(self, URL):
+        self.URL = URL
+    
+    def fetch(self):
+        # -- fetch live data from OpenSky --
+        start = time.time()  # used for fetch _duration
+        response = requests.get(self.URL)
+        if response.status_code != 200:
+            logging.error(f'OpenSky returned a {response.status_code}; aborting')
+            sys.exit(1) 
+        response_dict = response.json()
+        flights = response_dict['states']
+        fetch_duration = int((time.time() - start) * 1000) # milliseconds
+        return response_dict, flights, fetch_duration
+
 def main():
-    # -- fetch live data from OpenSky --
-    start = time.time()  # used for fetch _duration
-    response = requests.get(OPENSKY_URL)
-
-    if response.status_code != 200:
-        logging.error(f'OpenSky returned a {response.status_code}; aborting')
-        sys.exit(1)
-
-    response_dict = response.json()
-    flights = response_dict['states']
+    
+    fetcher = FlightFetcher(OPENSKY_URL)
+    response_dict, flights, fetch_duration = fetcher.fetch()
 
     # -- Build aircraft rows for bulk insert --
     aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
@@ -55,7 +64,6 @@ def main():
             # -- loading snapshot into the database
             snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
             flight_count = len(flights)
-            fetch_duration = int((time.time() - start) * 1000) # milliseconds
             fetch_status = 'success'
             cur.execute(
             '''INSERT INTO snapshots (
