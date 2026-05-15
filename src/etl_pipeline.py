@@ -4,16 +4,15 @@ Fetches a snapshot of all currently-airborne aircraft, then loads it into Postgr
 across three tables: snapshots (one row per fetch), aircraft (deduplicated), 
 and observations (one row per (aircraft, snapshot) pair).
 """
-
-import psycopg 
-from dotenv import load_dotenv
 import os
 from pathlib import Path
-import requests
 from datetime import datetime, timezone
 import time 
 import sys
 
+import psycopg 
+from dotenv import load_dotenv
+import requests
 
 ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(ENV_PATH)   # reads variables from .env file and sets them in the os.environ
@@ -73,24 +72,25 @@ def main():
             
             observation_rows = []
             for flight in flights:
+                snapshot_id, icao, callsign, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
                 observation = (
                     snapshot_id, 
-                    flight[0], 
-                    clean_text(flight[1]), 
-                    unix_to_utc(flight[3]), 
-                    unix_to_utc(flight[4]), 
-                    flight[5], 
-                    flight[6], 
-                    flight[7], 
-                    flight[8], 
-                    flight[9], 
-                    flight[10], 
-                    flight[11], 
-                    flight[12], 
-                    flight[13], 
-                    flight[14], 
-                    flight[15], 
-                    flight[16]
+                    icao, 
+                    clean_text(callsign), 
+                    unix_to_utc(time_position), 
+                    unix_to_utc(last_contact), 
+                    longitude, 
+                    latitude, 
+                    baro_altitude, 
+                    on_ground, 
+                    velocity, 
+                    true_track, 
+                    vertical_rate, 
+                    sensors, 
+                    geo_altitude, 
+                    squawk, 
+                    spi, 
+                    position_source
                     )
                 observation_rows.append(observation)    
 
