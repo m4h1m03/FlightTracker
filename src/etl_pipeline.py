@@ -72,7 +72,7 @@ def main():
             
             observation_rows = []
             for flight in flights:
-                snapshot_id, icao, callsign, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
+                icao, callsign, _, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
                 observation = (
                     snapshot_id, 
                     icao, 
