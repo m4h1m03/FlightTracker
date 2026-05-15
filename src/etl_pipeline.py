@@ -30,6 +30,7 @@ def unix_to_utc(value):
     return None if value is None else datetime.fromtimestamp(value, tz=timezone.utc)
 
 class FlightFetcher:
+    
     def __init__(self, URL):
         self.URL = URL
     
@@ -45,11 +46,67 @@ class FlightFetcher:
         fetch_duration = int((time.time() - start) * 1000) # milliseconds
         return response_dict, flights, fetch_duration
 
+class FlightLoader:
+
+    def __init__(self, dbname, user, host, port):
+        self.dbname = dbname
+        self.user = user
+        self.host = host
+        self.port = port
+
+    def insert_snapshot(self, cur, response_dict, flights, fetch_duration): 
+        # -- loading snapshot into the database
+        snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
+        flight_count = len(flights)
+        fetch_status = 'success'
+        cur.execute(
+        '''INSERT INTO snapshots (
+        snapshot_time, flight_count, 
+        fetch_duration, fetch_status
+        ) VALUES (%s, %s, %s, %s) RETURNING id''',
+        (snapshot_time, flight_count, fetch_duration, fetch_status))
+        snapshot_id = cur.fetchone()[0]
+        logging.info(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
+        return snapshot_id
+    
+    def insert_aircraft(self, cur, aircraft_rows):
+        # -- Same aircraft appears across many snapshots; skip if we've already recorded it
+        cur.executemany(
+        'INSERT INTO aircraft (icao24, origin_country) VALUES (%s, %s) ON CONFLICT (icao24) DO NOTHING',
+        aircraft_rows
+        )
+
+    def insert_observations(self, cur, observation_rows):
+        cur.executemany('''
+            INSERT INTO observations (
+            snapshot_id, 
+            icao24,
+            callsign, 
+            time_position,
+            last_contact,
+            longitude,
+            latitude,
+            baro_altitude,
+            on_ground,
+            velocity,
+            true_track,
+            vertical_rate,
+            sensors,
+            geo_altitude,
+            squawk,
+            spi,
+            position_source
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+            observation_rows                
+            )    
+        
 def main():
     
     fetcher = FlightFetcher(OPENSKY_URL)
     response_dict, flights, fetch_duration = fetcher.fetch()
 
+    loader = FlightLoader(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host=os.getenv('DB_HOST'), port=os.getenv('DB_PORT'))
+        
     # -- Build aircraft rows for bulk insert --
     aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
 
@@ -60,27 +117,9 @@ def main():
         port=os.getenv('DB_PORT')
     ) as conn:
         with conn.cursor() as cur:
-    
-            # -- loading snapshot into the database
-            snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
-            flight_count = len(flights)
-            fetch_status = 'success'
-            cur.execute(
-            '''INSERT INTO snapshots (
-            snapshot_time, flight_count, 
-            fetch_duration, fetch_status
-            ) VALUES (%s, %s, %s, %s) RETURNING id''',
-            (snapshot_time, flight_count, fetch_duration, fetch_status))
-            snapshot_id = cur.fetchone()[0]
-            logging.info(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
 
-            # -- Same aircraft appears across many snapshots; skip if we've already recorded it
-            cur.executemany(
-            'INSERT INTO aircraft (icao24, origin_country) VALUES (%s, %s) ON CONFLICT (icao24) DO NOTHING',
-            aircraft_rows
-            )
-            # -- Build observation rows for bulk insert --
-            
+            snapshot_id = loader.insert_snapshot(cur, response_dict, flights, fetch_duration)
+
             observation_rows = []
             for flight in flights:
                 icao, callsign, _, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
@@ -103,30 +142,10 @@ def main():
                     spi, 
                     position_source
                     )
-                observation_rows.append(observation)    
+                observation_rows.append(observation)
 
-            cur.executemany('''
-            INSERT INTO observations (
-            snapshot_id, 
-            icao24,
-            callsign, 
-            time_position,
-            last_contact,
-            longitude,
-            latitude,
-            baro_altitude,
-            on_ground,
-            velocity,
-            true_track,
-            vertical_rate,
-            sensors,
-            geo_altitude,
-            squawk,
-            spi,
-            position_source
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
-            observation_rows                
-            )
+            loader.insert_aircraft(cur, aircraft_rows)
+            loader.insert_observations(cur, observation_rows)
 
 if __name__ == "__main__":
     main()
