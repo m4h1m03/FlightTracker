@@ -9,6 +9,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import time 
 import sys
+import logging
 
 import psycopg 
 from dotenv import load_dotenv
@@ -18,6 +19,8 @@ ENV_PATH = Path(__file__).resolve().parent.parent / '.env'
 load_dotenv(ENV_PATH)   # reads variables from .env file and sets them in the os.environ
 
 OPENSKY_URL = 'https://opensky-network.org/api/states/all'
+
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 
 # Helper functions for observation bulk insert used later
 def clean_text(value):
@@ -32,7 +35,7 @@ def main():
     response = requests.get(OPENSKY_URL)
 
     if response.status_code != 200:
-        print(f'OpenSky returned a {response.status_code}; aborting ')
+        logging.error(f'OpenSky returned a {response.status_code}; aborting')
         sys.exit(1)
 
     response_dict = response.json()
@@ -61,7 +64,7 @@ def main():
             ) VALUES (%s, %s, %s, %s) RETURNING id''',
             (snapshot_time, flight_count, fetch_duration, fetch_status))
             snapshot_id = cur.fetchone()[0]
-            print(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
+            logging.info(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
 
             # -- Same aircraft appears across many snapshots; skip if we've already recorded it
             cur.executemany(
