@@ -53,6 +53,43 @@ class FlightLoader:
         self.user = user
         self.host = host
         self.port = port
+    
+    def load(self, response_dict, flights, fetch_duration, aircraft_rows):
+        with psycopg.connect(
+            dbname=self.dbname,
+            user=self.user, 
+            host=self.host, 
+            port=self.port
+        ) as conn:
+            with conn.cursor() as cur:
+                snapshot_id = self.insert_snapshot(cur, response_dict, flights, fetch_duration)
+
+                observation_rows = []
+                for flight in flights:
+                    icao, callsign, _, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
+                    observation = (
+                        snapshot_id, 
+                        icao, 
+                        clean_text(callsign), 
+                        unix_to_utc(time_position), 
+                        unix_to_utc(last_contact), 
+                        longitude, 
+                        latitude, 
+                        baro_altitude, 
+                        on_ground, 
+                        velocity, 
+                        true_track, 
+                        vertical_rate, 
+                        sensors, 
+                        geo_altitude, 
+                        squawk, 
+                        spi, 
+                        position_source
+                        )
+                    observation_rows.append(observation)
+
+                self.insert_aircraft(cur, aircraft_rows)
+                self.insert_observations(cur, observation_rows)
 
     def insert_snapshot(self, cur, response_dict, flights, fetch_duration): 
         # -- loading snapshot into the database
@@ -109,43 +146,9 @@ def main():
         
     # -- Build aircraft rows for bulk insert --
     aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
-
-    with psycopg.connect(
-        dbname=os.getenv('DB_NAME'), 
-        user=os.getenv('DB_USER'), 
-        host=os.getenv('DB_HOST'), 
-        port=os.getenv('DB_PORT')
-    ) as conn:
-        with conn.cursor() as cur:
-
-            snapshot_id = loader.insert_snapshot(cur, response_dict, flights, fetch_duration)
-
-            observation_rows = []
-            for flight in flights:
-                icao, callsign, _, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
-                observation = (
-                    snapshot_id, 
-                    icao, 
-                    clean_text(callsign), 
-                    unix_to_utc(time_position), 
-                    unix_to_utc(last_contact), 
-                    longitude, 
-                    latitude, 
-                    baro_altitude, 
-                    on_ground, 
-                    velocity, 
-                    true_track, 
-                    vertical_rate, 
-                    sensors, 
-                    geo_altitude, 
-                    squawk, 
-                    spi, 
-                    position_source
-                    )
-                observation_rows.append(observation)
-
-            loader.insert_aircraft(cur, aircraft_rows)
-            loader.insert_observations(cur, observation_rows)
+    
+    loader.load(response_dict, flights, fetch_duration, aircraft_rows)
+    
 
 if __name__ == "__main__":
     main()
