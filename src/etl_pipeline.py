@@ -66,7 +66,25 @@ class FlightLoader:
 
                 observation_rows = []
                 for flight in flights:
-                    icao, callsign, _, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source = flight
+                    (
+                        icao, 
+                        callsign, 
+                        _, 
+                        time_position, 
+                        last_contact, 
+                        longitude, 
+                        latitude, 
+                        baro_altitude, 
+                        on_ground, 
+                        velocity, 
+                        true_track, 
+                        vertical_rate, 
+                        sensors, 
+                        geo_altitude, 
+                        squawk, 
+                        spi, 
+                        position_source
+                    ) = flight
                     observation = (
                         snapshot_id, 
                         icao, 
@@ -85,7 +103,7 @@ class FlightLoader:
                         squawk, 
                         spi, 
                         position_source
-                        )
+                    )
                     observation_rows.append(observation)
 
                 self.insert_aircraft(cur, aircraft_rows)
@@ -96,44 +114,84 @@ class FlightLoader:
         snapshot_time = datetime.fromtimestamp(response_dict['time'], tz=timezone.utc) # -- Use UTC so the value is unambiguous regardless of where the script runs --
         flight_count = len(flights)
         fetch_status = 'success'
-        cur.execute(
-        '''INSERT INTO snapshots (
-        snapshot_time, flight_count, 
-        fetch_duration, fetch_status
-        ) VALUES (%s, %s, %s, %s) RETURNING id''',
-        (snapshot_time, flight_count, fetch_duration, fetch_status))
+        cur.execute('''
+            INSERT INTO snapshots (
+                snapshot_time, 
+                flight_count, 
+                fetch_duration, 
+                fetch_status
+            )
+            VALUES (
+                %s, 
+                %s, 
+                %s, 
+                %s
+            ) 
+            RETURNING id
+            ''',
+        (snapshot_time, flight_count, fetch_duration, fetch_status)
+        )
         snapshot_id = cur.fetchone()[0]
         logging.info(f'snapshot {snapshot_id}, inserted {flight_count} flights at {snapshot_time} (took {fetch_duration}ms)')
         return snapshot_id
     
     def insert_aircraft(self, cur, aircraft_rows):
         # -- Same aircraft appears across many snapshots; skip if we've already recorded it
-        cur.executemany(
-        'INSERT INTO aircraft (icao24, origin_country) VALUES (%s, %s) ON CONFLICT (icao24) DO NOTHING',
-        aircraft_rows
-        )
+        cur.executemany('''
+            INSERT INTO aircraft (
+                icao24, 
+                origin_country
+            ) 
+            VALUES (
+                %s, 
+                %s
+            ) 
+            ON CONFLICT (icao24) DO NOTHING
+            ''',
+            aircraft_rows
+            )
 
     def insert_observations(self, cur, observation_rows):
         cur.executemany('''
             INSERT INTO observations (
-            snapshot_id, 
-            icao24,
-            callsign, 
-            time_position,
-            last_contact,
-            longitude,
-            latitude,
-            baro_altitude,
-            on_ground,
-            velocity,
-            true_track,
-            vertical_rate,
-            sensors,
-            geo_altitude,
-            squawk,
-            spi,
-            position_source
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
+                snapshot_id, 
+                icao24,
+                callsign, 
+                time_position,
+                last_contact,
+                longitude,
+                latitude,
+                baro_altitude,
+                on_ground,
+                velocity,
+                true_track,
+                vertical_rate,
+                sensors,
+                geo_altitude,
+                squawk,
+                spi,
+                position_source
+            ) 
+            VALUES (
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s,
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s, 
+                %s
+            )
+            ''',
             observation_rows                
             )    
         
