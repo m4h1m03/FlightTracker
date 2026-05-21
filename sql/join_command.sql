@@ -1,3 +1,4 @@
+-- Joins observations, snapshots, and aircraft into a flat export for CSV/Google Sheets/Looker Studio.
 
 SELECT
 aircraft.icao24,
