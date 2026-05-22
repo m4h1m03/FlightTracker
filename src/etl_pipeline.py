@@ -48,18 +48,21 @@ class FlightFetcher:
 
 class FlightLoader:
 
-    def __init__(self, dbname, user, host, port):
+    def __init__(self, dbname, user, host, port, password):
         self.dbname = dbname
         self.user = user
         self.host = host
         self.port = port
+        self.password = password
     
     def load(self, response_dict, flights, fetch_duration, aircraft_rows):
         with psycopg.connect(
             dbname=self.dbname,
             user=self.user, 
             host=self.host, 
-            port=self.port
+            port=self.port,
+            password=self.password
+
         ) as conn:
             with conn.cursor() as cur:
                 snapshot_id = self.insert_snapshot(cur, response_dict, flights, fetch_duration)
@@ -152,55 +155,16 @@ class FlightLoader:
             )
 
     def insert_observations(self, cur, observation_rows):
-        cur.executemany('''
-            INSERT INTO observations (
-                snapshot_id, 
-                icao24,
-                callsign, 
-                time_position,
-                last_contact,
-                longitude,
-                latitude,
-                baro_altitude,
-                on_ground,
-                velocity,
-                true_track,
-                vertical_rate,
-                sensors,
-                geo_altitude,
-                squawk,
-                spi,
-                position_source
-            ) 
-            VALUES (
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s,
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s, 
-                %s
-            )
-            ''',
-            observation_rows                
-            )    
+        with cur.copy("COPY observations (snapshot_id, icao24, callsign, time_position, last_contact, longitude, latitude, baro_altitude, on_ground, velocity, true_track, vertical_rate, sensors, geo_altitude, squawk, spi, position_source) FROM STDIN") as copy:
+            for row in observation_rows:
+                copy.write_row(row)
         
 def main():
     
     fetcher = FlightFetcher(OPENSKY_URL)
     response_dict, flights, fetch_duration = fetcher.fetch()
 
-    loader = FlightLoader(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host=os.getenv('DB_HOST'), port=os.getenv('DB_PORT'))
+    loader = FlightLoader(dbname=os.getenv('DB_NAME'), user=os.getenv('DB_USER'), host=os.getenv('DB_HOST'), port=os.getenv('DB_PORT'), password=os.getenv('DB_PASSWORD'))
         
     # -- Build aircraft rows for bulk insert --
     aircraft_rows = [(flight[0], flight[2]) for flight in flights] # Using (icao24, origin_country) tuple
