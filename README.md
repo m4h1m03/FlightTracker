@@ -17,12 +17,11 @@ Mainly to understand what to expect in an ETL pipeline and what goes into buildi
 ### Stack
 
 - **Language:** Python
-- **Database:** PostgreSQL (local install via Postgres.app)
-- **DB GUI:** DBeaver
+- **Database:** PostgreSQL (Supabase)
 - **Data source:** OpenSky Network API (free, real-time flight positions)
-- **Dashboard:** Looker Studio (free, browser-based, native Mac, free Google Sheets connector)
+- **Dashboard:** Looker Studio (free, browser-based, free PostgreSQL connection)
 
-A Python script fetches live flight data by calling the OpenSky Network API. The data is then stored in PostgreSQL, where it is joined across tables using SQL and exported as a CSV. The CSV is imported into Google Sheets, which serves as the data source connection to Looker Studio for visualisation.
+A Python script fetches live flight data by calling the OpenSky Network API. The data is stored in a cloud-hosted PostgreSQL database (Supabase), where it is joined across three tables using SQL. Looker Studio connects directly to Supabase via a PostgreSQL connector to power the dashboard.
 
 ---
 
@@ -41,7 +40,7 @@ Considerable thought went into how to structure the database — how many tables
 The script needed to run automatically at regular intervals without manual intervention. `cron` was initially explored but proved unreliable due to macOS sleep behaviour. `launchd` was used instead as the more appropriate macOS-native solution.
 
 **5. Choosing a visualisation tool**
-Looker Studio was chosen based on its ability to handle the volume of data without straining local computational resources, its native browser-based interface, and the availability of a free Google Sheets connector.
+Looker Studio was chosen based on its ability to handle the volume of data without straining local computational resources, its browser-based interface, and the availability of a free PostgreSQL connector that allows it to query Supabase directly.
 
 ---
 
@@ -68,26 +67,17 @@ A dashboard is not just a collection of charts — every design decision (what t
 
 A fully functioning ETL pipeline that can be run manually or scheduled to execute automatically without manual intervention. The pipeline fetches live global flight data from the OpenSky Network API, stores it across a structured three-table PostgreSQL database, and transforms it using SQL joins for analysis.
 
-The project culminates in a fully interactive two-page Looker Studio dashboard. Page 1 provides a global overview of air traffic patterns — including a heatmap of flight density, flight count over time, and average velocity across snapshots. Page 2 focuses on a non-US breakdown, exploring aircraft observations, airborne vs on-ground ratios, altitude comparisons, and the relationship between altitude and velocity across origin countries. The dataset covers 16 snapshots collected on 11 May 2026 between 12:00 and 19:30 BST, totalling 184,124 observations.
+The project culminates in a fully interactive two-page Looker Studio dashboard. Page 1 provides a global overview of air traffic patterns — including a heatmap of flight density, flight count over time, and average velocity across snapshots. Page 2 focuses on a non-US breakdown, exploring aircraft observations, airborne vs on-ground ratios, altitude comparisons, and the relationship between altitude and velocity across origin countries. The dataset covers 25 snapshots collected on 25 May 2026 between 10:30 and 22:30 BST, totalling 254,525 observations.
 
 ---
 
 ## Improvements
 
-**1. Refactoring the ETL script**
-The script could be restructured to improve readability and simplicity — breaking it into smaller, more focused functions would make it easier to maintain and debug.
+**1. More data**
+25 snapshots collected over a single day is still a limited dataset. Running the pipeline continuously over several days or weeks would produce richer insights and reveal stronger patterns — particularly around time-of-day and day-of-week trends.
 
-**2. Database connection**
-A cloud-hosted PostgreSQL database (such as Supabase or Neon) connected directly to Looker Studio would eliminate the CSV/Google Sheets intermediary step, resulting in faster dashboard rendering and a more streamlined pipeline.
-
-**3. More data**
-16 snapshots collected over a single afternoon is a limited dataset. Running the pipeline continuously over several days or weeks would produce richer insights and reveal stronger patterns — particularly around time-of-day and day-of-week trends.
-
-**4. Better scheduling**
-Replacing `StartInterval` with `StartCalendarInterval` in the launchd plist would make the scheduling more reliable, particularly after the Mac wakes from sleep.
-
-**5. Error logging**
+**2. Error logging**
 Adding more robust logging to the ETL script would make it easier to diagnose failures and monitor the pipeline's health over time.
 
-**6. Data validation**
+**3. Data validation**
 Adding checks in the Python script to flag or handle unexpected values from the API before they reach the database would improve data quality and reduce the risk of corrupt records downstream.
