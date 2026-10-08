@@ -61,6 +61,15 @@ Automating a script to run without manual intervention introduced me to `cron` a
 **5. The role of visualisation in data storytelling**
 A dashboard is not just a collection of charts — every design decision (what to include, what to exclude, how to label things) shapes the story the data tells. Looker Studio reinforced how much thought goes into translating raw data into meaningful, readable insights.
 
+**6. Scheduled jobs need an off-switch**
+A scheduled job keeps running until it is properly stopped. Unloading my launchd job was not enough to stop it for good: it appears to have restarted with my Mac and quietly kept collecting data from late July. `launchctl disable` is the persistent way to switch a job off, and a collection job should have an end date built in.
+
+**7. Free-tier limits are real constraints**
+Supabase's Free plan caps the database at 500 MB. Going over it slowed the dashboard and put the project at risk of going read-only. Monitoring usage and trimming data deliberately are part of running a pipeline. `TRUNCATE` returns disk space immediately, whereas `DELETE` on its own does not.
+
+**8. Dashboard measures must match the grain of the data**
+`flight_count` is a per-snapshot value repeated on every observation row, so summing or averaging it overstates results. It inflated my map weights and my average card (10,458 against the true 10,181); counting records fixed both. Rounding map points to a coarser grid also cut the map from roughly 247,000 points to around 5,500, which made it load far faster.
+
 ---
 
 ## What I Built
@@ -69,15 +78,26 @@ A fully functioning ETL pipeline that can be run manually or scheduled to execut
 
 The project culminates in a fully interactive two-page Looker Studio dashboard. Page 1 provides a global overview of air traffic patterns — including a heatmap of flight density, flight count over time, and average velocity across snapshots. Page 2 focuses on a non-US breakdown, exploring aircraft observations, airborne vs on-ground ratios, altitude comparisons, and the relationship between altitude and velocity across origin countries. The dataset covers 25 snapshots collected on 25 May 2026 between 10:30 and 22:30 BST, totalling 254,525 observations.
 
+The dashboard deliberately shows this single day. After the planned collection finished, the scheduled launchd job stayed set up on my Mac and quietly kept adding snapshots from late July to early October. That grew the database to around 5.3 million rows (1,043 MB) and past Supabase's 500 MB Free plan limit, which left the dashboard slow to load. I disabled the job and trimmed the database back to the original day (now around 70 MB), so the dashboard loads in seconds and every figure on it matches the dataset described above.
+
 ---
 
 ## Improvements
 
 **1. More data**
-25 snapshots collected over a single day is still a limited dataset. Running the pipeline continuously over several days or weeks would produce richer insights and reveal stronger patterns — particularly around time-of-day and day-of-week trends.
+25 snapshots collected over a single day is still a limited dataset. Running the pipeline continuously over several days or weeks would produce richer insights and reveal stronger patterns — particularly around time-of-day and day-of-week trends. Doing this properly would need a plan for storage: an end date or retention limit, and either a paid tier or pre-aggregated older data, because the Supabase Free plan's 500 MB limit only holds a couple of hundred snapshots of this size.
 
 **2. Error logging**
 Adding more robust logging to the ETL script would make it easier to diagnose failures and monitor the pipeline's health over time.
 
 **3. Data validation**
 Adding checks in the Python script to flag or handle unexpected values from the API before they reach the database would improve data quality and reduce the risk of corrupt records downstream.
+
+**4. Guard rails on scheduled collection**
+The pipeline should stop itself, for example after a set number of snapshots or an end date, and check the database size before inserting so it cannot silently outgrow its plan.
+
+**5. Timeouts and failure handling**
+The ETL script's network and database calls have no timeouts. One stalled run stayed open for almost three days, which stopped launchd from starting any later runs. Adding timeouts and clearer failure handling would prevent this.
+
+**6. Pre-aggregated dashboard data**
+Pointing Looker Studio at the full three-table join means every chart re-scans every observation. A pre-aggregated table or materialised view would keep the dashboard fast as the data grows.
