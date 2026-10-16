@@ -1,2 +1,4 @@
 #!/bin/bash
-/Users/mahimahmed/Desktop/VSCode/FlightTracker/.venv/bin/python /Users/mahimahmed/Desktop/VSCode/FlightTracker/src/etl_pipeline.py >> /Users/mahimahmed/Desktop/VSCode/FlightTracker/logs/etl.log 2>&1
+project_dir="$( cd "$( dirname "$0" )" && pwd)"
+mkdir -p "$project_dir/logs"
+"$project_dir/.venv/bin/python" "$project_dir/src/etl_pipeline.py" >> "$project_dir/logs/etl.log" 2>&1
