@@ -20,6 +20,7 @@ Mainly to understand what to expect in an ETL pipeline and what goes into buildi
 - **Database:** PostgreSQL (Supabase)
 - **Data source:** OpenSky Network API (free, real-time flight positions)
 - **Dashboard:** Looker Studio (free, browser-based, free PostgreSQL connection)
+- **Keepalive:** GitHub Actions scheduled workflow (daily) that queries the database so the Supabase Free project does not pause
 
 A Python script fetches live flight data by calling the OpenSky Network API. The data is stored in a cloud-hosted PostgreSQL database (Supabase), where it is joined across three tables using SQL. Looker Studio connects directly to Supabase via a PostgreSQL connector to power the dashboard.
 
@@ -41,6 +42,9 @@ The script needed to run automatically at regular intervals without manual inter
 
 **5. Choosing a visualisation tool**
 Looker Studio was chosen based on its ability to handle the volume of data without straining local computational resources, its browser-based interface, and the availability of a free PostgreSQL connector that allows it to query Supabase directly.
+
+**6. Keeping the free database awake**
+Supabase's Free plan pauses a project after about a week of low activity, and mine kept pausing, which broke the dashboard. I considered upgrading to a paid plan, making the dashboard independent of Supabase, and keeping the database active with a small daily query. I tried the second option first, copying the data into a Looker Studio extract, but the charts' calculated metrics depend on Looker's internal Record Count fields for each data source, so switching the source broke them and I could not match the original dashboard. I reverted that and went with a scheduled GitHub Actions workflow that runs a short Python script (`src/keepalive.py`) once a day. Because the repository is public, the database credentials are stored as repository secrets rather than in the code. This is separate from the ETL script, which still runs on my Mac via `launchd`.
 
 ---
 
@@ -69,6 +73,9 @@ Supabase's Free plan caps the database at 500 MB. Going over it slowed the dashb
 
 **8. Dashboard measures must match the grain of the data**
 `flight_count` is a per-snapshot value repeated on every observation row, so summing or averaging it overstates results. It inflated my map weights and my average card (10,458 against the true 10,181); counting records fixed both. Rounding map points to a coarser grid also cut the map from roughly 247,000 points to around 5,500, which made it load far faster.
+
+**9. Scheduled workflows, secrets and CI networking**
+GitHub Actions can run a script on a cron schedule (in UTC) or manually through `workflow_dispatch`, which is useful for testing before waiting for the schedule. Repository secrets keep credentials out of a public repo and are passed to the script as environment variables. GitHub's runners only support IPv4, so the job connects through Supabase's session pooler instead of the direct (IPv6-only) connection. I also practised making a script fail loudly with a non-zero exit code and testing that failure path before relying on it.
 
 ---
 
@@ -101,3 +108,6 @@ The ETL script's network and database calls have no timeouts. One stalled run st
 
 **6. Pre-aggregated dashboard data**
 Pointing Looker Studio at the full three-table join means every chart re-scans every observation. A pre-aggregated table or materialised view would keep the dashboard fast as the data grows.
+
+**7. Keepalive limits and alerts**
+GitHub disables scheduled workflows on a public repository after 60 days without any repository activity, so the keepalive is not completely set-and-forget. It also only covers this one Supabase project. Adding a failure alert, such as an email when a run fails, would show a problem straight away instead of after the project has already paused.
