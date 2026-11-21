@@ -1,0 +1,30 @@
+name: Supabase keepalive
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: FlightTracker
+        uses: actions/checkout@v4
+
+      - name: Setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run keepalive
+        env:
+          DB_HOST: ${{ secrets.DB_HOST}}
+          DB_PORT: ${{ secrets.DB_PORT}}
+          DB_NAME: ${{ secrets.DB_NAME}}
+          DB_USER: ${{ secrets.DB_USER}}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD}}
+        run: python src/keepalive.py
